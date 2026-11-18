@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <memory>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -531,6 +532,27 @@ struct DynamicBitVector::Impl {
     }
     return validate(node->left, false, nodes) && validate(node->right, false, nodes);
   }
+
+  void render_tree(const Node& node, std::ostringstream& output, const std::string& prefix, bool is_last) const {
+    output << prefix << (is_last ? "`- " : "+- ");
+    if (node.leaf()) {
+      output << "leaf bits=" << node.length << " handle=0x" << std::hex << node.handle.raw << std::dec
+             << " e=" << node.excess << " m=" << node.minimum << " M=" << node.maximum
+             << " n=" << node.minimum_count << " ones=" << node.ones << " data=";
+      const Pool& source = pool(node.handle);
+      for (std::size_t bit = 0; bit < node.length; ++bit) {
+        output << (source.get(node.handle.ordinal(), bit) ? '1' : '0');
+      }
+      output << '\n';
+      return;
+    }
+    output << "node bits=" << node.total << " height=" << node.height << " e=" << node.excess
+           << " m=" << node.minimum << " M=" << node.maximum << " n=" << node.minimum_count
+           << " ones=" << node.ones << '\n';
+    const std::string child_prefix = prefix + (is_last ? "   " : "|  ");
+    render_tree(*node.left, output, child_prefix, false);
+    render_tree(*node.right, output, child_prefix, true);
+  }
 };
 
 DynamicBitVector::DynamicBitVector(std::uint16_t segment_bits) : impl_(new Impl(segment_bits)) {}
@@ -663,6 +685,29 @@ MemoryStatistics DynamicBitVector::memory_statistics() const {
 bool DynamicBitVector::check_invariants() const {
   std::size_t nodes{};
   return impl_->validate(impl_->root, true, nodes);
+}
+
+std::string DynamicBitVector::debug_tree(std::size_t max_bits) const {
+  std::ostringstream output;
+  if (size() > max_bits) {
+    output << "DynamicBitVector visualization skipped: " << size() << " bits exceeds limit " << max_bits << ".\n";
+    return output.str();
+  }
+  output << "DynamicBitVector AVL (1=+1, 0=-1)\n";
+  output << "bits=" << size() << " L=" << impl_->l << " cells=";
+  std::size_t cells{};
+  std::size_t segments{};
+  for (const Pool& pool : impl_->pools) {
+    cells += pool.cells.size();
+    segments += pool.owners.size();
+  }
+  output << cells << " segments=" << segments << '\n';
+  if (!impl_->root) {
+    output << "`- empty\n";
+    return output.str();
+  }
+  impl_->render_tree(*impl_->root, output, "", true);
+  return output.str();
 }
 
 }  // namespace dmt

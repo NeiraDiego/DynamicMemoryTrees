@@ -4,7 +4,7 @@ project(dynamic_memory_trees LANGUAGES CXX)
 
 option(DMT_ENABLE_SANITIZERS "Enable address and undefined behavior sanitizers" OFF)
 
-add_library(dmt src/dynamic_bitvector.cpp)
+add_library(dmt src/dynamic_bitvector.cpp src/tree_visualizer.cpp)
 target_include_directories(dmt PUBLIC include)
 target_compile_features(dmt PUBLIC cxx_std_23)
 target_compile_options(dmt PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)

@@ -145,6 +145,16 @@ Las operaciones que reciben posiciones inválidas lanzan `std::out_of_range`.
 Las búsquedas y `select1` usan `std::optional` para representar resultados
 ausentes que no son errores de rango.
 
+## Visualización de árboles pequeños
+
+`include/dmt/tree_visualizer.hpp` expone
+`visualize_small_tree(const DynamicBitVector&, max_bits)`. La función produce
+una representación ASCII del AVL real: nodos internos, hojas, longitud,
+altura, handle, agregados y bits de cada hoja. Su objetivo es inspección y
+depuración, no rendimiento ni serialización. Por defecto rechaza secuencias de
+más de 256 bits con un mensaje breve; el límite evita generar una salida que no
+sea legible.
+
 ## Glosario
 
 - **Bitvector dinámica**: secuencia de bits que admite inserción y borrado, a

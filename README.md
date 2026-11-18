@@ -17,3 +17,7 @@ Or run `./compilar.sh` to configure and rebuild the library, tests, and the
 
 `PROJECT_MEMORY.md` records the agreed scope, architectural decisions, and
 deferred work for future sessions or model changes.
+
+For small debugging examples, include `dmt/tree_visualizer.hpp` and call
+`dmt::visualize_small_tree(bits)`. It emits an ASCII view of the actual AVL
+nodes, leaves, handles, aggregates, and leaf bit data.

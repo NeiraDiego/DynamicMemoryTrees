@@ -3,9 +3,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace dmt {
+
+class DynamicBitVector;
+
+// Produces an ASCII representation of the internal AVL tree for debugging.
+// The function reports a concise refusal when the vector exceeds max_bits.
+[[nodiscard]] std::string visualize_small_tree(const DynamicBitVector& bits, std::size_t max_bits = 256);
 
 struct MemoryStatistics {
   std::size_t useful_bits{};
@@ -56,6 +63,9 @@ class DynamicBitVector {
   [[nodiscard]] bool check_invariants() const;
 
  private:
+  friend std::string visualize_small_tree(const DynamicBitVector& bits, std::size_t max_bits);
+  [[nodiscard]] std::string debug_tree(std::size_t max_bits) const;
+
   struct Impl;
   Impl* impl_;
 };

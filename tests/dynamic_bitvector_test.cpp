@@ -1,4 +1,5 @@
 #include "dmt/dynamic_bitvector.hpp"
+#include "dmt/tree_visualizer.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -138,6 +139,18 @@ void balanced_parentheses_queries() {
   assert(!bits.find_close(2));
 }
 
+void tree_visualization() {
+  dmt::DynamicBitVector bits(2);
+  for (const bool bit : std::vector<bool>{true, true, false, true, false, false}) {
+    bits.insert(bits.size(), bit);
+  }
+  const std::string visualization = dmt::visualize_small_tree(bits);
+  assert(visualization.contains("DynamicBitVector AVL"));
+  assert(visualization.contains("leaf bits="));
+  assert(visualization.contains("data="));
+  assert(dmt::visualize_small_tree(bits, 4).contains("visualization skipped"));
+}
+
 void bounds_test() {
   dmt::DynamicBitVector bits;
   bool threw = false;
@@ -155,5 +168,6 @@ int main() {
   deterministic_operations();
   randomized_differential_test();
   balanced_parentheses_queries();
+  tree_visualization();
   bounds_test();
 }
