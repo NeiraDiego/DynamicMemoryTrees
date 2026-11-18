@@ -141,14 +141,26 @@ void balanced_parentheses_queries() {
 
 void tree_visualization() {
   dmt::DynamicBitVector bits(2);
-  for (const bool bit : std::vector<bool>{true, true, false, true, false, false}) {
+  for (const bool bit : std::vector<bool>{true, true, true, false, true, false, true, false,
+                                          false, true, true, true, false, false, false, false}) {
     bits.insert(bits.size(), bit);
   }
   const std::string visualization = dmt::visualize_small_tree(bits);
-  assert(visualization.contains("DynamicBitVector AVL"));
-  assert(visualization.contains("leaf bits="));
-  assert(visualization.contains("data="));
-  assert(dmt::visualize_small_tree(bits, 4).contains("visualization skipped"));
+  assert(visualization.contains("(1)"));
+  assert(visualization.contains("(2)"));
+  assert(visualization.contains("(8)"));
+
+  dmt::DynamicBitVector invalid(2);
+  for (const bool bit : std::vector<bool>{true, false, false, true}) {
+    invalid.insert(invalid.size(), bit);
+  }
+  bool threw = false;
+  try {
+    (void)dmt::visualize_small_tree(invalid);
+  } catch (const std::invalid_argument&) {
+    threw = true;
+  }
+  assert(threw);
 }
 
 void bounds_test() {

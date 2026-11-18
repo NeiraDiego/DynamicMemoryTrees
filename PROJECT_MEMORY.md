@@ -148,12 +148,12 @@ ausentes que no son errores de rango.
 ## Visualización de árboles pequeños
 
 `include/dmt/tree_visualizer.hpp` expone
-`visualize_small_tree(const DynamicBitVector&, max_bits)`. La función produce
-una representación ASCII del AVL real: nodos internos, hojas, longitud,
-altura, handle, agregados y bits de cada hoja. Su objetivo es inspección y
-depuración, no rendimiento ni serialización. Por defecto rechaza secuencias de
-más de 256 bits con un mensaje breve; el límite evita generar una salida que no
-sea legible.
+`visualize_small_tree(const DynamicBitVector&)`. La función valida que la
+secuencia sea un único árbol de paréntesis balanceados y produce una
+representación ASCII del árbol ordinal. El primer `1` crea la raíz y el último
+`0` la cierra, pero no se imprimen como aristas: los `1` internos crean hijos y
+los `0` internos retornan al padre. Los nodos se numeran por orden de apertura.
+Si la secuencia no es válida, la función lanza `std::invalid_argument`.
 
 ## Glosario
 

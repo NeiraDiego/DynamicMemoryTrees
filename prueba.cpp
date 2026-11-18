@@ -1,4 +1,5 @@
 #include "dmt/dynamic_bitvector.hpp"
+#include "dmt/tree_visualizer.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -18,9 +19,9 @@ int main() {
   bits.erase(1);
   */
 
-  std::ifstream input("datos/1024_parentesis.csv");
+  std::ifstream input("data/miniTree8nodes.csv");
   if (!input) {
-    throw std::runtime_error("no se pudo abrir datos/1024_parentesis.csv");
+    throw std::runtime_error("could not open data/miniTree8nodes.csv");
   }
   for (char character; input.get(character);) {
     if (character == '0' || character == '1') {
@@ -29,8 +30,8 @@ int main() {
       throw std::runtime_error("el CSV contiene un caracter que no es un bit");
     }
   }
-  if (bits.size() != 1024U) {
-    throw std::runtime_error("el CSV debe contener exactamente 1024 bits");
+  if (bits.size() != 16U) {
+    throw std::runtime_error("the CSV must contain exactly 16 bits");
   }
 
   std::cout << "size: " << bits.size() << '\n';
@@ -48,4 +49,5 @@ int main() {
   if (const auto closing = bits.find_close(0)) {
     std::cout << "matching close: " << *closing << '\n';
   }
+  std::cout << "\nTree:\n" << dmt::visualize_small_tree(bits);
 }
