@@ -1,0 +1,2 @@
+the data on /data/big can be downloded from:
+https://www.inf.udec.cl/~jfuentess/datasets/files/par/wiki.tar.gz
