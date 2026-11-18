@@ -5,6 +5,7 @@
 #include <bit>
 #include <cstdlib>
 #include <memory>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -65,6 +66,11 @@ struct Node {
   Handle handle{};
   std::size_t length{};
   std::size_t total{};
+  std::size_t ones{};
+  std::int64_t excess{};
+  std::int64_t minimum{};
+  std::int64_t maximum{};
+  std::size_t minimum_count{};
   int height{1};
   std::unique_ptr<Node> left;
   std::unique_ptr<Node> right;
@@ -78,11 +84,6 @@ struct Node {
 
 [[nodiscard]] std::size_t total(const std::unique_ptr<Node>& node) {
   return node ? node->total : 0;
-}
-
-void refresh(Node& node) {
-  node.height = 1 + std::max(height(node.left), height(node.right));
-  node.total = node.leaf() ? node.length : total(node.left) + total(node.right);
 }
 
 }  // namespace
@@ -148,6 +149,49 @@ struct DynamicBitVector::Impl {
     return bits;
   }
 
+  [[nodiscard]] RangeMinMaxSummary summarize(Handle handle, std::size_t length) const {
+    RangeMinMaxSummary result{0, std::numeric_limits<std::int64_t>::max(),
+                              std::numeric_limits<std::int64_t>::min(), 0};
+    const Pool& source = pool(handle);
+    for (std::size_t bit = 0; bit < length; ++bit) {
+      result.excess += source.get(handle.ordinal(), bit) ? 1 : -1;
+      if (result.excess < result.minimum) {
+        result.minimum = result.excess;
+        result.minimum_count = 1;
+      } else if (result.excess == result.minimum) {
+        ++result.minimum_count;
+      }
+      result.maximum = std::max(result.maximum, result.excess);
+    }
+    return result;
+  }
+
+  void refresh(Node& node) {
+    node.height = 1 + std::max(height(node.left), height(node.right));
+    if (node.leaf()) {
+      node.total = node.length;
+      const RangeMinMaxSummary summary = summarize(node.handle, node.length);
+      node.excess = summary.excess;
+      node.minimum = summary.minimum;
+      node.maximum = summary.maximum;
+      node.minimum_count = summary.minimum_count;
+      node.ones = static_cast<std::size_t>((node.length + node.excess) / 2);
+      return;
+    }
+    node.total = total(node.left) + total(node.right);
+    node.ones = node.left->ones + node.right->ones;
+    node.excess = node.left->excess + node.right->excess;
+    node.minimum = std::min(node.left->minimum, node.left->excess + node.right->minimum);
+    node.maximum = std::max(node.left->maximum, node.left->excess + node.right->maximum);
+    if (node.left->minimum < node.left->excess + node.right->minimum) {
+      node.minimum_count = node.left->minimum_count;
+    } else if (node.left->minimum > node.left->excess + node.right->minimum) {
+      node.minimum_count = node.right->minimum_count;
+    } else {
+      node.minimum_count = node.left->minimum_count + node.right->minimum_count;
+    }
+  }
+
   void replace(Node& node, const std::vector<bool>& bits) {
     const Handle old = node.handle;
     node.length = bits.size();
@@ -161,6 +205,7 @@ struct DynamicBitVector::Impl {
     node->length = bits.size();
     node->total = bits.size();
     node->handle = allocate(node.get(), bits);
+    refresh(*node);
     return node;
   }
 
@@ -260,6 +305,22 @@ struct DynamicBitVector::Impl {
     node = balance(std::move(node));
   }
 
+  void set_at(std::unique_ptr<Node>& node, std::size_t position, bool value) {
+    if (node->leaf()) {
+      Pool& source = pool(node->handle);
+      source.set(node->handle.ordinal(), position, value);
+      refresh(*node);
+      return;
+    }
+    const std::size_t left_total = total(node->left);
+    if (position < left_total) {
+      set_at(node->left, position, value);
+    } else {
+      set_at(node->right, position - left_total, value);
+    }
+    refresh(*node);
+  }
+
   void erase_at(std::unique_ptr<Node>& node, std::size_t position) {
     if (node->leaf()) {
       auto bits = read(node->handle, node->length);
@@ -347,6 +408,92 @@ struct DynamicBitVector::Impl {
     return locate(*node.right, position - left_total, local);
   }
 
+  [[nodiscard]] std::int64_t prefix_excess(const Node& node, std::size_t count) const {
+    if (count == 0) {
+      return 0;
+    }
+    if (count == node.total) {
+      return node.excess;
+    }
+    if (node.leaf()) {
+      std::int64_t result{};
+      const Pool& source = pool(node.handle);
+      for (std::size_t bit = 0; bit < count; ++bit) {
+        result += source.get(node.handle.ordinal(), bit) ? 1 : -1;
+      }
+      return result;
+    }
+    const std::size_t left_total = total(node.left);
+    if (count <= left_total) {
+      return prefix_excess(*node.left, count);
+    }
+    return node.left->excess + prefix_excess(*node.right, count - left_total);
+  }
+
+  [[nodiscard]] std::size_t prefix_ones(const Node& node, std::size_t count) const {
+    if (count == 0) {
+      return 0;
+    }
+    if (count == node.total) {
+      return node.ones;
+    }
+    if (node.leaf()) {
+      std::size_t result{};
+      const Pool& source = pool(node.handle);
+      for (std::size_t bit = 0; bit < count; ++bit) {
+        result += source.get(node.handle.ordinal(), bit) ? 1U : 0U;
+      }
+      return result;
+    }
+    const std::size_t left_total = total(node.left);
+    if (count <= left_total) {
+      return prefix_ones(*node.left, count);
+    }
+    return node.left->ones + prefix_ones(*node.right, count - left_total);
+  }
+
+  [[nodiscard]] std::optional<std::size_t> select_one(const Node& node, std::size_t occurrence,
+                                                       std::size_t offset) const {
+    if (node.leaf()) {
+      const Pool& source = pool(node.handle);
+      for (std::size_t bit = 0; bit < node.length; ++bit) {
+        if (source.get(node.handle.ordinal(), bit) && occurrence-- == 0) {
+          return offset + bit;
+        }
+      }
+      return std::nullopt;
+    }
+    if (occurrence < node.left->ones) {
+      return select_one(*node.left, occurrence, offset);
+    }
+    return select_one(*node.right, occurrence - node.left->ones, offset + node.left->total);
+  }
+
+  [[nodiscard]] std::optional<std::size_t> find_excess(const Node& node, std::size_t offset,
+                                                        std::size_t begin, std::int64_t prefix,
+                                                        std::int64_t target) const {
+    if (offset + node.total <= begin) {
+      return std::nullopt;
+    }
+    if (offset >= begin && (target < prefix + node.minimum || target > prefix + node.maximum)) {
+      return std::nullopt;
+    }
+    if (node.leaf()) {
+      const Pool& source = pool(node.handle);
+      for (std::size_t bit = 0; bit < node.length; ++bit) {
+        prefix += source.get(node.handle.ordinal(), bit) ? 1 : -1;
+        if (offset + bit >= begin && prefix == target) {
+          return offset + bit;
+        }
+      }
+      return std::nullopt;
+    }
+    if (const auto result = find_excess(*node.left, offset, begin, prefix, target)) {
+      return result;
+    }
+    return find_excess(*node.right, offset + node.left->total, begin, prefix + node.left->excess, target);
+  }
+
   [[nodiscard]] bool validate(const std::unique_ptr<Node>& node, bool is_root, std::size_t& nodes) const {
     if (!node) {
       return true;
@@ -357,10 +504,25 @@ struct DynamicBitVector::Impl {
         return false;
       }
       const Pool& source = pool(node->handle);
+      const RangeMinMaxSummary summary = summarize(node->handle, node->length);
       return source.segment_length == node->length && node->handle.ordinal() < source.owners.size() &&
-             source.owners[node->handle.ordinal()] == node.get();
+             source.owners[node->handle.ordinal()] == node.get() && node->excess == summary.excess &&
+             node->minimum == summary.minimum && node->maximum == summary.maximum &&
+             node->minimum_count == summary.minimum_count &&
+             node->ones == static_cast<std::size_t>((node->length + node->excess) / 2);
     }
-    if (!node->left || !node->right || node->total != total(node->left) + total(node->right)) {
+    if (!node->left || !node->right || node->total != total(node->left) + total(node->right) ||
+        node->ones != node->left->ones + node->right->ones || node->excess != node->left->excess + node->right->excess ||
+        node->minimum != std::min(node->left->minimum, node->left->excess + node->right->minimum) ||
+        node->maximum != std::max(node->left->maximum, node->left->excess + node->right->maximum)) {
+      return false;
+    }
+    const std::size_t expected_minimum_count = node->left->minimum < node->left->excess + node->right->minimum
+                                                   ? node->left->minimum_count
+                                                   : node->left->minimum > node->left->excess + node->right->minimum
+                                                         ? node->right->minimum_count
+                                                         : node->left->minimum_count + node->right->minimum_count;
+    if (node->minimum_count != expected_minimum_count) {
       return false;
     }
     if (std::abs(height(node->left) - height(node->right)) > 1 ||
@@ -409,9 +571,7 @@ void DynamicBitVector::set(std::size_t position, bool value) {
   if (position >= size()) {
     throw std::out_of_range("bit position out of range");
   }
-  std::size_t local{};
-  const Node& leaf = impl_->locate(*impl_->root, position, local);
-  impl_->pool(leaf.handle).set(leaf.handle.ordinal(), local, value);
+  impl_->set_at(impl_->root, position, value);
 }
 
 void DynamicBitVector::insert(std::size_t position, bool value) {
@@ -429,6 +589,54 @@ void DynamicBitVector::erase(std::size_t position) {
   if (impl_->root && impl_->has_underfull_leaf(impl_->root)) {
     impl_->rebuild();
   }
+}
+
+RangeMinMaxSummary DynamicBitVector::range_min_max() const noexcept {
+  if (!impl_->root) {
+    return {};
+  }
+  return {impl_->root->excess, impl_->root->minimum, impl_->root->maximum, impl_->root->minimum_count};
+}
+
+std::int64_t DynamicBitVector::excess_before(std::size_t position) const {
+  if (position > size()) {
+    throw std::out_of_range("prefix position out of range");
+  }
+  return impl_->root ? impl_->prefix_excess(*impl_->root, position) : 0;
+}
+
+std::size_t DynamicBitVector::rank1(std::size_t position) const {
+  if (position > size()) {
+    throw std::out_of_range("prefix position out of range");
+  }
+  return impl_->root ? impl_->prefix_ones(*impl_->root, position) : 0;
+}
+
+std::optional<std::size_t> DynamicBitVector::select1(std::size_t occurrence) const {
+  if (!impl_->root || occurrence >= impl_->root->ones) {
+    return std::nullopt;
+  }
+  return impl_->select_one(*impl_->root, occurrence, 0);
+}
+
+std::optional<std::size_t> DynamicBitVector::find_first_excess(std::size_t begin, std::int64_t target) const {
+  if (begin > size()) {
+    throw std::out_of_range("search position out of range");
+  }
+  if (!impl_->root || begin == size()) {
+    return std::nullopt;
+  }
+  return impl_->find_excess(*impl_->root, 0, begin, 0, target);
+}
+
+std::optional<std::size_t> DynamicBitVector::find_close(std::size_t opening_position) const {
+  if (opening_position >= size()) {
+    throw std::out_of_range("opening position out of range");
+  }
+  if (!at(opening_position)) {
+    return std::nullopt;
+  }
+  return find_first_excess(opening_position + 1U, excess_before(opening_position));
 }
 
 std::vector<bool> DynamicBitVector::to_vector() const {

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace dmt {
@@ -12,6 +13,15 @@ struct MemoryStatistics {
   std::size_t allocated_cells{};
   std::size_t segments{};
   std::size_t tree_nodes{};
+};
+
+// Values are relative to the beginning of a subtree, with bit 1 = +1 and
+// bit 0 = -1. minimum_count counts occurrences after consuming a bit.
+struct RangeMinMaxSummary {
+  std::int64_t excess{};
+  std::int64_t minimum{};
+  std::int64_t maximum{};
+  std::size_t minimum_count{};
 };
 
 class DynamicBitVector {
@@ -32,6 +42,14 @@ class DynamicBitVector {
   void set(std::size_t position, bool value);
   void insert(std::size_t position, bool value);
   void erase(std::size_t position);
+
+  [[nodiscard]] RangeMinMaxSummary range_min_max() const noexcept;
+  [[nodiscard]] std::int64_t excess_before(std::size_t position) const;
+  [[nodiscard]] std::size_t rank1(std::size_t position) const;
+  [[nodiscard]] std::optional<std::size_t> select1(std::size_t occurrence) const;
+  [[nodiscard]] std::optional<std::size_t> find_first_excess(std::size_t begin,
+                                                              std::int64_t target) const;
+  [[nodiscard]] std::optional<std::size_t> find_close(std::size_t opening_position) const;
 
   [[nodiscard]] std::vector<bool> to_vector() const;
   [[nodiscard]] MemoryStatistics memory_statistics() const;

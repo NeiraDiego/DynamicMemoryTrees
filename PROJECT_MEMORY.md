@@ -38,13 +38,21 @@ Functional Static and Dynamic Succinct Trees*.
   statistics.
 - Differential randomized tests against a plain bit vector.
 
+## Implemented range min-max layer
+
+- The AVL now stores per-node excess `e`, minimum `m`, maximum `M`, and the
+  occurrence count `n` for `m`, using the composition formulas from the paper.
+- The public API exposes aggregate values, prefix excess, `rank1`, `select1`,
+  forward search for a global excess, and matching-close lookup.
+- In this implementation `1` contributes `+1` and `0` contributes `-1`.
+
 ## Deferred work
 
 - Local, worst-case `O(log n)` merge/borrow handling for underfull segments.
 - Dynamic changes to `L` and the deamortized three-part technique.
 - Universal lookup tables and word-parallel local rank/select/search.
-- Range min-max aggregates: `e`, `m`, `M`, and occurrence count `n`.
-- Balanced-parentheses queries and ordinal tree updates.
+- Backward search, RMQ position queries, and the remaining balanced-parentheses
+  and ordinal-tree operations.
 - GPU upload/view and GPU kernels.
 
 ## Design constraints for later phases
