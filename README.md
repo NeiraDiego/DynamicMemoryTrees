@@ -12,5 +12,8 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Or run `./compilar.sh` to configure and rebuild the library, tests, and the
+`preuba` example. Execute it with `./build/preuba`.
+
 `PROJECT_MEMORY.md` records the agreed scope, architectural decisions, and
 deferred work for future sessions or model changes.
